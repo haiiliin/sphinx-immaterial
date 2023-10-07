@@ -76,6 +76,11 @@ Each metadata is evaluated as a :rst:`:key: value` pair.
     A common use case for this option is to specify it on automatically-generated
     pages, as for those pages there is no source document to edit.
 
+.. themeconf:: edit-url
+
+    If specified, overrides the :themeconf:`edit_uri` setting for a given page but without
+    the repo url as the prefix.
+
 .. themeconf:: hide-footer
 
     If specified, hides the current page's footer (specifically the part containing the
@@ -218,6 +223,14 @@ Configuration Options
         Defaults to a blank string (which disables the edit icon). This is disabled for builds on
         ReadTheDocs as they implement their own mechanism based on the repository's branch or tagged
         commit.
+
+    .. themeconf:: edit_url_pages
+
+        Page-specific edit urls can be specified using the :themeconf:`edit_url_pages` field in a `dict`
+        in which the keys are the page's source file path relative to the docs source folder without the.
+        file extension and the values are the page's full edit urls without the repo url. If specified,
+        overrides the :themeconf:`edit_uri` setting and the :themeconf:`edit-url` metadata field for a
+        given page.
 
     .. themeconf:: features
 
