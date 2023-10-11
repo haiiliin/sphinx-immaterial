@@ -216,6 +216,19 @@ Configuration Options
                     },
                 }
 
+        .. themeconf:: alternate
+
+            The icon used for the language selector button. See :themeconf:`languages` to
+            configure the options in the language selector drop-down menu.
+
+            .. code-block:: python
+
+                html_theme_options = {
+                    "icon": {
+                        "logo": "material/translate"
+                    },
+                }
+
     .. themeconf:: edit_uri
 
         This is the url segment that is concatenated with :themeconf:`repo_url` to point readers to the document's
