@@ -11,7 +11,7 @@ on:
       - main
   workflow_dispatch:
   schedule:
-    - cron: '0 0 1,16 * *'
+    - cron: "0 0 1,16 * *"
 
 jobs:
   check_conventions:
@@ -19,25 +19,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        nox-sessions:
-          - 'black check_yaml check_json check_toml check_eof check_trailing_space check_lf'
-        python-version: ['3.x']
-        node-version: ['16.x']
         include:
-          - nox-sessions: 'mypy pylint'
-            python-version: '3.8'
-          - nox-sessions: 'mypy pylint'
-            python-version: '3.9'
-          - nox-sessions: 'mypy pylint'
-            python-version: '3.10'
-          - nox-sessions: 'mypy pylint'
-            python-version: '3.11'
-          - nox-sessions: 'mypy pylint'
-            python-version: '3.12'
+          - nox-sessions: "ruff_format ruff_lint check_yaml check_json check_toml check_eof check_trailing_space check_lf"
+            python-version: "3.x"
+            node-version: "16.x"
+          - nox-sessions: "mypy"
+            python-version: "3.9"
+          - nox-sessions: "mypy"
+            python-version: "3.10"
+          - nox-sessions: "mypy"
+            python-version: "3.11"
+          - nox-sessions: "mypy"
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
-        if: contains(matrix, 'node-version')
+        if: matrix.node-version
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -47,23 +44,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache node.js modules
-        if: contains(matrix, 'node-version')
+        if: matrix.node-version
         uses: actions/cache@v4
         with:
           path: "**/node_modules"
           key: ${{ runner.os }}-${{ matrix.node-version }}-node_modules-${{ hashFiles('**/package-lock.json') }}
       - name: Cache nox environments
-        if: contains(matrix, 'node-version')
         uses: actions/cache@v4
+        if: matrix.node-version
         with:
           path: |
-            .nox/black
+            .nox/ruff_*
             .nox/check_*
-          key: nox-${{ steps.python-setup.outputs.python-version }}-${{ hashFiles('requirements/dev-black.txt', 'requirements/dev-pre_commit_hooks.txt') }}
+          key: nox-${{ steps.python-setup.outputs.python-version }}-${{ hashFiles('requirements/dev-ruff.txt', 'requirements/dev-pre_commit_hooks.txt') }}
       - run: npm install
-        if: contains(matrix, 'node-version')
+        if: matrix.node-version
       - run: npm run check
-        if: contains(matrix, 'node-version')
+        if: matrix.node-version
       - run: pipx run nox -s ${{ matrix.nox-sessions }}
 
   build:
@@ -72,13 +69,13 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - 'ubuntu-latest'
-          - 'windows-latest'
-          - 'macos-latest'
+          - "ubuntu-latest"
+          - "windows-latest"
+          - "macos-latest"
         python-version:
-          - '3.x'
+          - "3.x"
         node-version:
-          - '16.x'
+          - "16.x"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -115,9 +112,9 @@ jobs:
             dist/*.whl
             dist/*.tar.*
       - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@d5b2b6b67007094b256f3fd2fa6cf0ac41ceef25 # v2.0.0
+        uses: ts-graphviz/setup-graphviz@b1de5da23ed0a6d14e0aeee8ed52fdd87af2363c # v2.0.2
         with:
-          macos-skip-brew-update: 'true'
+          macos-skip-brew-update: "true"
       - uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/theme_build_cache
@@ -125,7 +122,7 @@ jobs:
       - name: Build docs
         env:
           SPHINX_IMMATERIAL_EXTERNAL_RESOURCE_CACHE_DIR: ${{ github.workspace }}/theme_build_cache
-        run: nox -s docs
+        run: nox -s docs --forcecolor
       - name: Upload doc builds as artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -133,7 +130,7 @@ jobs:
           path: docs/_build/
       - name: upload docs to github pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && runner.os == 'Linux'
-        uses: peaceiris/actions-gh-pages@de7ea6f8efb354206b205ef54722213d99067935 # pinned to v3.9.0
+        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # pinned to v4.0.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs/_build/html
@@ -144,25 +141,16 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - 'ubuntu-latest'
-          - 'windows-latest'
-          - 'macos-latest'
+          - "ubuntu-latest"
+          - "windows-latest"
+          - "macos-latest"
         python-version:
-          - '3.8'
-          - '3.9'
-          - '3.10'
-          - '3.11'
-          - '3.12'
-        sphinx-version:
-          - 'sphinx4'
-          - 'sphinx5'
-          - 'sphinx6'
-          - 'sphinx7'
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
         node-version:
-          - '16.x'
-        exclude:
-          - python-version: '3.8'
-            sphinx-version: 'sphinx7'
+          - "16.x"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -182,9 +170,9 @@ jobs:
       - name: Build CSS and JS bundles
         run: npm run build
       - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@d5b2b6b67007094b256f3fd2fa6cf0ac41ceef25 # v2.0.0
+        uses: ts-graphviz/setup-graphviz@b1de5da23ed0a6d14e0aeee8ed52fdd87af2363c # v2.0.2
         with:
-          macos-skip-brew-update: 'true'
+          macos-skip-brew-update: "true"
       - uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/theme_build_cache
@@ -192,13 +180,14 @@ jobs:
       - name: Run Python tests
         env:
           SPHINX_IMMATERIAL_EXTERNAL_RESOURCE_CACHE_DIR: ${{ github.workspace }}/theme_build_cache
-          COVERAGE_FILE: .coverage.${{ github.run_id }}.${{ github.run_attempt }}.${{ runner.os }}.${{ matrix.python-version }}.${{ matrix.sphinx-version }}
+          COVERAGE_FILE: .coverage.${{ github.run_id }}.${{ github.run_attempt }}.${{ runner.os }}.${{ matrix.python-version }}
+          PY_COLORS: 1
         # `coverage run` cmd adds the working dir to python path, so no need to install pkg here
-        run: pipx run nox -s "tests-${{ matrix.python-version }}(${{ matrix.sphinx-version }})"
+        run: pipx run nox -s tests --forcecolor --python ${{ matrix.python-version }}
       - name: Upload coverage data
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-data-${{ runner.os }}-py${{ matrix.python-version }}-${{ matrix.sphinx-version }}
+          name: coverage-data-${{ runner.os }}-py${{ matrix.python-version }}
           path: .coverage*
 
   coverage-report:
@@ -215,16 +204,17 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
       - name: Create coverage report
         run: pipx run nox -s coverage
-      - name: Upload comprehensive coverage HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: htmlcov/
       - name: Post coverage summary
-        run: cat .coverage_.md >> $GITHUB_STEP_SUMMARY
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{secrets.CODECOV_TOKEN}}
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: true # optional (default = false)
+          verbose: true # optional (default = false)
 
   compare-wheels:
     runs-on: ubuntu-latest
@@ -266,7 +256,7 @@ jobs:
           name: python-packages-Linux
           path: dist
       - name: Publish to PyPI (test server)
-        uses: pypa/gh-action-pypi-publish@2f6f737ca5f74c637829c0f5c3acd0e29ea5e8bf # v1.8.11
+        uses: pypa/gh-action-pypi-publish@ec4db0b4ddc65acdf4bff5fa45ac92d78b56bdf0 # v1.9.0
         continue-on-error: true
         with:
           user: __token__
@@ -274,7 +264,7 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
         if: ${{ ! startsWith(github.ref, 'refs/tags/v') }}
       - name: Publish to PyPI (main server)
-        uses: pypa/gh-action-pypi-publish@2f6f737ca5f74c637829c0f5c3acd0e29ea5e8bf # v1.8.11
+        uses: pypa/gh-action-pypi-publish@ec4db0b4ddc65acdf4bff5fa45ac92d78b56bdf0 # v1.9.0
         with:
           user: __token__
           password: ${{ secrets.pypi_token }}

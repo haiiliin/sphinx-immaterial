@@ -17,7 +17,7 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import setuptools  # pylint: disable=wrong-import-order
+import setuptools
 
 import atexit
 import distutils.command.build
@@ -163,7 +163,7 @@ class StaticBundlesCommand(setuptools.command.build_py.build_py):
             else:
                 subprocess.call("npm i", shell=True, cwd=root_dir)
             res = subprocess.call(f"npm run {tgt}", shell=True, cwd=root_dir)
-        except:
+        except:  # noqa: E722
             raise RuntimeError("Could not run 'npm run %s'." % tgt)
 
         if res:
@@ -198,7 +198,7 @@ setuptools.setup(
         ],
         "sphinx_immaterial.apidoc.cpp.cppreference_data": ["*.xml"],
     },
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     install_requires=REQUIREMENTS,
     use_scm_version={
         # It would be nice to include the commit hash in the version, but that
@@ -229,7 +229,14 @@ setuptools.setup(
     ],
     extras_require={
         k: read_optional_reqs(f"{k}.txt")
-        for k in ["json", "jsonschema_validation", "clang-format", "keys", "cpp"]
+        for k in [
+            "json",
+            "jsonschema_validation",
+            "clang-format",
+            "keys",
+            "cpp",
+            "black",
+        ]
     },
     cmdclass=dict(
         sdist=SdistCommand,

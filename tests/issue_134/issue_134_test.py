@@ -1,5 +1,5 @@
-"""Test specific to https://github.com/jbms/sphinx-immaterial/issues/134
-"""
+"""Test specific to https://github.com/jbms/sphinx-immaterial/issues/134"""
+
 from typing import List
 import pytest
 from sphinx.testing.util import SphinxTestApp
@@ -32,5 +32,5 @@ def test_autoclass_members(immaterial_make_app):
         extra_conf='extensions.append("sphinx.ext.autodoc")\n',
     )
     app.build()
-    assert not app._warning.getvalue()
-    print(app._status.getvalue())
+    assert not app._warning.getvalue()  # type: ignore[attr-defined]
+    print(app._status.getvalue())  # type: ignore[attr-defined]

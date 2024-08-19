@@ -1,21 +1,35 @@
 """Adds support for :noindex:, :symbol-ids:, and :node-id: options."""
 
 import json
-from typing import Optional, Union, Type, List
+import re
+from typing import Optional, Union, Type, List, Tuple
 
 import docutils.parsers.rst.directives
 import sphinx.addnodes
 import sphinx.domains.c
 import sphinx.domains.cpp
+from sphinx.domains.c import CDomain
+from sphinx.domains.cpp import CPPDomain
+
+from . import last_resolved_symbol
 
 AST_ID_OVERRIDE_ATTR = "_sphinx_immaterial_id"
 ANCHOR_ATTR = "sphinx_immaterial_anchor"
+
+PARAMETER_OBJECT_TYPES = (
+    "functionParam",
+    "macroParam",
+    "templateParam",
+    "templateTypeParam",
+    "templateTemplateParam",
+    "templateNonTypeParam",
+)
 
 
 def _monkey_patch_override_ast_id(
     ast_declaration_class: Union[
         Type[sphinx.domains.c.ASTDeclaration], Type[sphinx.domains.cpp.ASTDeclaration]
-    ]
+    ],
 ):
     """Allows the Symbol id to be overridden."""
     orig_get_id = ast_declaration_class.get_id
@@ -34,9 +48,11 @@ def _monkey_patch_override_ast_id(
 
 
 def get_symbol_anchor(
-    symbol: Union[sphinx.domains.c.Symbol, sphinx.domains.cpp.Symbol]
+    symbol: Union[sphinx.domains.c.Symbol, sphinx.domains.cpp.Symbol],
 ) -> str:
-    anchor = getattr(symbol.declaration, ANCHOR_ATTR, None)
+    anchor = None
+    if symbol.declaration is not None:
+        anchor = getattr(symbol.declaration, ANCHOR_ATTR, None)
     if anchor is None:
         assert symbol.declaration is not None
         anchor = symbol.declaration.get_newest_id()
@@ -120,7 +136,7 @@ def _monkey_patch_cpp_noindex_option(
                         other_symbol.remove()
                         break
                 else:
-                    raise AssertionError(  # pylint: disable=raise-missing-from
+                    raise AssertionError(
                         "Duplicate symbol not found: %r" % (symbol.dump(2),)
                     )
             return symbol
@@ -144,6 +160,8 @@ def _monkey_patch_cpp_noindex_option(
         node_id = self.options.get("node-id")
         if node_id is not None:
             symbol = ast.symbol
+            assert symbol is not None
+            assert symbol.declaration is not None
             setattr(symbol.declaration, ANCHOR_ATTR, node_id)
             symbol.docname = self.env.docname
             if ast is self.names[0] and node_id:
@@ -157,7 +175,7 @@ def _monkey_patch_cpp_noindex_option(
     orig_run = object_class.run
 
     def run(
-        self: Union[sphinx.domains.c.CObject, sphinx.domains.cpp.CPPObject]
+        self: Union[sphinx.domains.c.CObject, sphinx.domains.cpp.CPPObject],
     ) -> List[docutils.nodes.Node]:
         result = orig_run(self)  # type: ignore[arg-type]
 
@@ -170,6 +188,63 @@ def _monkey_patch_cpp_noindex_option(
         return result
 
     object_class.run = run  # type: ignore[assignment]
+
+
+def _monkey_patch_to_override_symbol_anchor(
+    domain_class: Union[
+        Type[sphinx.domains.cpp.CPPDomain], Type[sphinx.domains.c.CDomain]
+    ],
+):
+    """Patch C/C++ resolve_xref to allow overriding the anchor id."""
+    orig_resolve_xref_inner = domain_class._resolve_xref_inner
+
+    def _resolve_xref_inner(
+        self: Union[CDomain, CPPDomain],
+        env: sphinx.environment.BuildEnvironment,
+        fromdocname: str,
+        builder: sphinx.builders.Builder,
+        typ: str,
+        target: str,
+        node: sphinx.addnodes.pending_xref,
+        contnode: docutils.nodes.Element,
+    ) -> Tuple[Optional[docutils.nodes.Element], Optional[str]]:
+        refnode, objtype = orig_resolve_xref_inner(
+            self,  # type: ignore
+            env,
+            fromdocname,
+            builder,
+            typ,
+            target,
+            node,
+            contnode,
+        )
+        if refnode is None:
+            return refnode, objtype
+
+        assert objtype is not None
+
+        last_symbol = last_resolved_symbol.get_symbol()
+
+        if (
+            objtype in PARAMETER_OBJECT_TYPES
+            and getattr(last_symbol.declaration, AST_ID_OVERRIDE_ATTR, None) is None
+        ):
+            # This is a parameter without an associated `:param:` entry.  It
+            # should just be linked to the parent symbol.
+            anchor = get_symbol_anchor(last_symbol.parent)
+        else:
+            anchor = get_symbol_anchor(last_symbol)
+
+        if "refid" in refnode:
+            refnode["refid"] = anchor
+        else:
+            new_refurl = re.sub("#.*", "", refnode["refuri"])
+            if anchor:
+                new_refurl += f"#{anchor}"
+            refnode["refurl"] = new_refurl
+        return refnode, objtype
+
+    domain_class._resolve_xref_inner = _resolve_xref_inner  # type: ignore
 
 
 _monkey_patch_override_ast_id(sphinx.domains.c.ASTDeclaration)
@@ -186,3 +261,5 @@ _monkey_patch_cpp_noindex_option(
     env_parent_symbol_key="c:parent_symbol",
     duplicate_symbol_error=sphinx.domains.c._DuplicateSymbolError,
 )
+_monkey_patch_to_override_symbol_anchor(domain_class=sphinx.domains.cpp.CPPDomain)
+_monkey_patch_to_override_symbol_anchor(domain_class=sphinx.domains.c.CDomain)

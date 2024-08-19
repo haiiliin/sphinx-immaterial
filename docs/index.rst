@@ -66,7 +66,7 @@ Update your ``conf.py`` with the required changes:
 
 .. code-block:: python
 
-    extension = ["sphinx_immaterial"]
+    extensions = ["sphinx_immaterial"]
     # ...
     html_theme = "sphinx_immaterial"
 
@@ -142,3 +142,8 @@ or ``theme.conf`` for more details.
     rst-cheatsheet/rst-cheatsheet
     additional_samples
     myst_typography
+
+.. toctree::
+    :hidden:
+
+    theme_result

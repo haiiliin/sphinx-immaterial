@@ -37,7 +37,7 @@ def _is_generated_file(rst_path: str, initial_comment: str) -> bool:
             return False
         content = pathlib.Path(rst_path).read_text(encoding="utf-8")
         return content.startswith(initial_comment)
-    except:  # pylint: disable=bare-except
+    except Exception:
         return False
 
 
@@ -89,7 +89,6 @@ class GeneratedDocumentWriter:
     def clear_existing_generated_files(self):
         srcdir = self.app.srcdir
         for output_prefix in self.output_prefixes:
-            glob_pattern = os.path.join(srcdir, output_prefix)
             for p in glob.glob(
                 os.path.join(srcdir, output_prefix + "*.rst"), recursive=True
             ):

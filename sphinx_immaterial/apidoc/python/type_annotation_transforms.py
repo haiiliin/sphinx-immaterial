@@ -3,7 +3,6 @@
 import ast
 import functools
 import re
-import sys
 from typing import (
     cast,
     Dict,
@@ -17,35 +16,13 @@ from typing import (
 )
 
 import docutils.nodes
+import sphinx
 import sphinx.application
 import sphinx.domains.python
 import sphinx.environment
 import sphinx.util.logging
-from sphinx import version_info
 
-# `ast.unparse` added in Python 3.9
-if sys.version_info >= (3, 9):
-    from ast import unparse as ast_unparse
-else:
-    from sphinx.pycode.ast import unparse as ast_unparse
-    from sphinx.pycode.ast import _UnparseVisitor
-
-    def _monkey_patch_sphinx_ast_unparse():
-        """Monkey patch Sphinx's `ast_unparse`.
-
-        This adds support for some additional ast nodes that we require.
-        """
-
-        def visit_Module(self: _UnparseVisitor, node: ast.Module) -> str:
-            return "\n".join(self.visit(el) for el in node.body)
-
-        def visit_Expr(self: _UnparseVisitor, node: ast.Expr) -> str:
-            return self.visit(node.value)
-
-        _UnparseVisitor.visit_Module = visit_Module  # type: ignore[assignment]
-        _UnparseVisitor.visit_Expr = visit_Expr  # type: ignore[assignment]
-
-    _monkey_patch_sphinx_ast_unparse()
+from . import type_param_utils
 
 logger = sphinx.util.logging.getLogger(__name__)
 
@@ -128,19 +105,6 @@ def _dotted_name_to_ast(
     return tree
 
 
-if sys.version_info < (3, 8):
-    _CONSTANT_AST_NODE_TYPES = (
-        ast.Constant,
-        ast.Num,
-        ast.Str,
-        ast.Bytes,
-        ast.Ellipsis,
-        ast.NameConstant,
-    )
-else:
-    _CONSTANT_AST_NODE_TYPES = (ast.Constant,)
-
-
 _CONFIG_ATTR = "_sphinx_immaterial_python_type_transform_config"
 
 
@@ -173,7 +137,7 @@ def _retain_explicit_literal(node: ast.AST) -> bool:
 
     Since constants cannot be types, there is no ambiguity.
     """
-    return not isinstance(node, _CONSTANT_AST_NODE_TYPES)
+    return not isinstance(node, ast.Constant)
 
 
 class TypeAnnotationTransformer(ast.NodeTransformer):
@@ -248,10 +212,13 @@ class TypeAnnotationTransformer(ast.NodeTransformer):
 
 
 def _monkey_patch_python_domain_to_transform_type_annotations():
-    orig_parse_annotation = sphinx.domains.python._parse_annotation
+    if sphinx.version_info >= (7, 3):
+        orig_parse_annotation = sphinx.domains.python._annotations._parse_annotation  # type: ignore[attr-defined]
+    else:
+        orig_parse_annotation = sphinx.domains.python._parse_annotation
 
     def _parse_annotation(annotation: str, env: sphinx.environment.BuildEnvironment):
-        transformer_config = getattr(env, _CONFIG_ATTR, None)
+        transformer_config = getattr(env.app, _CONFIG_ATTR, None)
         if transformer_config is None or not transformer_config.transform:
             return orig_parse_annotation(annotation, env)
 
@@ -263,9 +230,12 @@ def _monkey_patch_python_domain_to_transform_type_annotations():
         transformer = TypeAnnotationTransformer()
         transformer.config = cast(TypeTransformConfig, transformer_config)
         tree = ast.fix_missing_locations(transformer.visit(tree))
-        annotation = ast_unparse(tree)
+        annotation = ast.unparse(tree)
         return orig_parse_annotation(annotation, env)
 
+    if sphinx.version_info >= (7, 3):
+        sphinx.domains.python._annotations._parse_annotation = _parse_annotation  # type: ignore[assignment,attr-defined]
+        sphinx.domains.python._object._parse_annotation = _parse_annotation  # type: ignore[assignment,attr-defined]
     sphinx.domains.python._parse_annotation = _parse_annotation  # type: ignore[assignment]
 
 
@@ -328,7 +298,7 @@ def _builder_inited(app: sphinx.application.Sphinx):
         )
 
     setattr(
-        app.env,
+        app,
         _CONFIG_ATTR,
         TypeTransformConfig(
             transform=bool(
@@ -348,7 +318,10 @@ def _builder_inited(app: sphinx.application.Sphinx):
 
 
 def _monkey_patch_python_domain_to_transform_xref_titles():
-    orig_type_to_xref = sphinx.domains.python.type_to_xref
+    if sphinx.version_info >= (7, 3):
+        orig_type_to_xref = sphinx.domains.python._annotations.type_to_xref
+    else:
+        orig_type_to_xref = sphinx.domains.python.type_to_xref
 
     def type_to_xref(
         target: str,
@@ -356,7 +329,23 @@ def _monkey_patch_python_domain_to_transform_xref_titles():
         *args,
         suppress_prefix: bool = False,
     ) -> sphinx.addnodes.pending_xref:
-        if version_info < (7, 2):
+        if (type_param := type_param_utils.decode_type_param(target)) is not None:
+            refnode = sphinx.addnodes.pending_xref(
+                "",
+                docutils.nodes.Text(type_param.__name__),
+                refdomain="py",
+                reftype="param",
+                reftarget=type_param.__name__,
+                refspecific=True,
+                refexplicit=True,
+                refwarn=True,
+            )
+            refnode["py:func"] = env.ref_context.get("py:func")
+            refnode["py:class"] = env.ref_context.get("py:class")
+            refnode["py:module"] = env.ref_context.get("py:module")
+            return refnode
+
+        if sphinx.version_info < (7, 2):
             # suppress_prefix may not have been used like a kwarg before v7.2.0 as
             # there was only 3 params for type_to_xref() prior to v7.2.0
             if args:
@@ -371,7 +360,7 @@ def _monkey_patch_python_domain_to_transform_xref_titles():
             and len(node.children) == 1
             and node.children[0].astext() == target
         ):
-            transformer_config = getattr(env, _CONFIG_ATTR, None)
+            transformer_config = getattr(env.app, _CONFIG_ATTR, None)
             if transformer_config is not None:
                 strip_modules_from_xrefs_pattern = (
                     transformer_config.strip_modules_from_xrefs_pattern
@@ -383,13 +372,16 @@ def _monkey_patch_python_domain_to_transform_xref_titles():
                         node.append(docutils.nodes.Text(new_target))
         return node
 
+    if sphinx.version_info >= (7, 3):
+        sphinx.domains.python._annotations.type_to_xref = type_to_xref  # type: ignore[assignment]
     sphinx.domains.python.type_to_xref = type_to_xref  # type: ignore[assignment]
 
 
-def setup(app: sphinx.application.Sphinx):
-    _monkey_patch_python_domain_to_transform_type_annotations()
-    _monkey_patch_python_domain_to_transform_xref_titles()
+_monkey_patch_python_domain_to_transform_type_annotations()
+_monkey_patch_python_domain_to_transform_xref_titles()
 
+
+def setup(app: sphinx.application.Sphinx):
     app.add_config_value(
         "python_type_aliases",
         default={},

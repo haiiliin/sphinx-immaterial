@@ -40,7 +40,8 @@ import sphinx.util
 import sphinx.util.docutils
 import sphinx.util.logging
 import sphinx.util.matching
-import yaml  # pylint: disable=import-error
+from sphinx.locale import _
+import yaml
 
 from .. import object_description_options
 from . import json_pprint
@@ -48,6 +49,8 @@ from ... import sphinx_utils
 from .. import apigen_utils
 
 logger = sphinx.util.logging.getLogger(__name__)
+
+_SCHEMA_DATA_APP_KEY = "_sphinx_immaterial_json_schema_data"
 
 
 class JsonSchemaMapEntry(NamedTuple):
@@ -216,7 +219,7 @@ class LoadedSchemaData:
         return "%s:" % (filename,)
 
 
-def yaml_load(  # pylint: disable=invalid-name
+def yaml_load(
     stream,
     source_path: str,
 ) -> Tuple[Any, YamlSourceInfoMap]:
@@ -288,7 +291,7 @@ def _get_json_schema_files(app: sphinx.application.Sphinx):
 def _populate_json_schema_id_map(app: sphinx.application.Sphinx):
     """Finds all schema files and loads them into `_json_schema_id_map`."""
     schema_data = LoadedSchemaData()
-    setattr(app.env, "json_schema_data", schema_data)
+    setattr(app, _SCHEMA_DATA_APP_KEY, schema_data)
     seen_ids: Dict[str, str] = {}
     all_paths = list(_get_json_schema_files(app))
     validate = app.config.json_schema_validate
@@ -465,7 +468,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
 
     objtype = "schema"
 
-    option_spec = {
+    option_spec = {  # type: ignore[misc]
         "fully_qualified_name": str,
         "title": str,
         "toc_title": str,
@@ -596,10 +599,10 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
             if schema_node.get("minItems") == schema_node.get("maxItems"):
                 prefix.append(_json_literal(self.state, schema_node["minItems"]))
             else:
-                if schema_node["minItems"]:
+                if schema_node.get("minItems"):
                     prefix.append(_json_literal(self.state, schema_node["minItems"]))
                 prefix.append(sphinx.addnodes.desc_sig_punctuation("", ".."))
-                if schema_node["maxItems"]:
+                if "maxItems" in schema_node:
                     prefix.append(_json_literal(self.state, schema_node["maxItems"]))
             prefix.append(sphinx.addnodes.desc_sig_punctuation("", "]"))
 
@@ -674,7 +677,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
         :param properties: Dict to be filled with members.
         :param required: Set to which required members are added.
         """
-        schema_data: LoadedSchemaData = getattr(self.env, "json_schema_data")
+        schema_data: LoadedSchemaData = getattr(self.env.app, _SCHEMA_DATA_APP_KEY)
         if "$ref" in schema_node:
             ref = schema_node["$ref"]
             referenced_entry = schema_data.id_map.get(ref)
@@ -728,7 +731,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
 
         :returns: The rendered result as a list of docutils nodes.
         """
-        schema_data: LoadedSchemaData = getattr(self.env, "json_schema_data")
+        schema_data: LoadedSchemaData = getattr(self.env.app, _SCHEMA_DATA_APP_KEY)
         field_list, body = self._make_field("One of")
         one_ofs = self._schema_entry.schema["oneOf"]
         # If all oneof options are constant strings, generate fully-qualified
@@ -764,7 +767,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
         :returns: A tuple (path, line) specifying the source information.
         """
 
-        schema_data: LoadedSchemaData = getattr(self.env, "json_schema_data")
+        schema_data: LoadedSchemaData = getattr(self.env.app, _SCHEMA_DATA_APP_KEY)
         return schema_data.get_node_source_info_from_schema_string(
             source_string, self._schema_entry.path
         )
@@ -810,7 +813,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
 
     def _render_body(self) -> List[docutils.nodes.Node]:
         """Renders the body of the schema."""
-        schema_data: LoadedSchemaData = getattr(self.env, "json_schema_data")
+        schema_data: LoadedSchemaData = getattr(self.env.app, _SCHEMA_DATA_APP_KEY)
         schema_node = self._schema_entry.schema
         result: List[docutils.nodes.Node] = []
 
@@ -864,7 +867,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
                 ):
                     continue
                 heading = "%s members" % ("Required" if required else "Optional")
-                field_list, body = self._make_field(heading)
+                field_list, body = self._make_field(_(heading))
                 result.append(field_list)
                 for member_name, member_schema in properties.items():
                     if (member_name in required_properties) != required:
@@ -957,7 +960,7 @@ class JsonSchemaDirective(sphinx.directives.ObjectDescription):
         signode["ids"].append(self._node_id)
 
     def run(self) -> List[docutils.nodes.Node]:
-        schema_data: LoadedSchemaData = self.env.json_schema_data  # type: ignore
+        schema_data: LoadedSchemaData = getattr(self.env.app, _SCHEMA_DATA_APP_KEY)
         schema_id = self.arguments[0]
         schema_entry = schema_data.id_map.get(schema_id)
         if schema_entry is None:
@@ -1147,9 +1150,7 @@ class JsonSchemaDomain(sphinx.domains.Domain):
                 else OBJECT_PRIORITY_UNIMPORTANT,
             )
 
-    def merge_domaindata(
-        self, docnames: List[str], otherdata: Dict
-    ) -> None:  # pylint: disable=g-bare-generic
+    def merge_domaindata(self, docnames: List[str], otherdata: Dict) -> None:
         self.schemas.update(otherdata["schemas"])
 
     def _find_schema(

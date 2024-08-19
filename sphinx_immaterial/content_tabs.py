@@ -1,6 +1,7 @@
 """
 A special theme-specific extension to support "content tabs" from mkdocs-material.
 """
+
 from typing import List
 from docutils import nodes
 from docutils.parsers.rst import directives
@@ -172,7 +173,7 @@ def visit_tab_set(self: HTMLTranslator, node: content_tab_set):
 
 
 def depart_tab_set(self: HTMLTranslator, node: content_tab_set):
-    pass
+    pass  # pragma: no cover
 
 
 def setup(app: Sphinx):

@@ -50,7 +50,22 @@ DEFAULT_OBJECT_DESCRIPTION_OPTIONS: List[Tuple[str, dict]] = [
     ("py:property", {"toc_icon_class": "alias", "toc_icon_text": "P"}),
     ("py:attribute", {"toc_icon_class": "alias", "toc_icon_text": "A"}),
     ("py:data", {"toc_icon_class": "alias", "toc_icon_text": "V"}),
-    ("py:parameter", {"toc_icon_class": "sub-data", "toc_icon_text": "p"}),
+    (
+        "py:parameter",
+        {
+            "toc_icon_class": "sub-data",
+            "toc_icon_text": "p",
+            "generate_synopses": "first_sentence",
+        },
+    ),
+    (
+        "py:typeParameter",
+        {
+            "toc_icon_class": "alias",
+            "toc_icon_text": "T",
+            "generate_synopses": "first_sentence",
+        },
+    ),
     ("c:member", {"toc_icon_class": "alias", "toc_icon_text": "V"}),
     ("c:var", {"toc_icon_class": "alias", "toc_icon_text": "V"}),
     ("c:function", {"toc_icon_class": "procedure", "toc_icon_text": "F"}),
@@ -188,7 +203,7 @@ def _builder_inited(app: sphinx.application.Sphinx) -> None:
                 options[name] = pydantic.TypeAdapter(
                     registered_option.type_constraint
                 ).validate_python(value)
-            except Exception as e:  # pylint: disable=broad-except
+            except Exception as e:
                 logger.error(
                     "Invalid value %r for object description option"
                     " %r specified for pattern %r: %s",

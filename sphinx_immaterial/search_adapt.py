@@ -86,7 +86,6 @@ class IndexBuilder(sphinx.search.IndexBuilder):
                 objtype_entry = onames[typeindex]
                 domain_name = objtype_entry[0]
                 objtype = objtype_entry[1]
-                domain = self.env.domains[domain_name]
 
                 docname = docindex_to_docname.get(docindex)
 
@@ -163,7 +162,9 @@ class IndexBuilder(sphinx.search.IndexBuilder):
         return result
 
     def load(
-        self, stream: IO, format: Any  # pylint: disable=redefined-builtin
+        self,
+        stream: IO,
+        format: Any,
     ) -> None:
         if isinstance(format, str):
             format = self.formats[format]
@@ -190,7 +191,7 @@ class IndexBuilder(sphinx.search.IndexBuilder):
                 filenames.append(url)
             else:
                 docnames.append(docname)
-                filenames.append(self.env.doc2path(docname, False))
+                filenames.append(str(self.env.doc2path(docname, False)))
         frozen["docnames"] = docnames
         frozen["filenames"] = filenames
         new_data = format.dumps(frozen)

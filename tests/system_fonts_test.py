@@ -1,4 +1,5 @@
 """Tests related to theme's patched graphviz ext."""
+
 from sphinx.testing.util import SphinxTestApp
 
 
@@ -33,4 +34,4 @@ A graph
     )
 
     app.build()
-    assert not app._warning.getvalue()
+    assert not app._warning.getvalue()  # type: ignore[attr-defined]
